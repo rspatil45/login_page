@@ -7,7 +7,9 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 // const encrypt = require('mongoose-encryption');
-const md5 = require('md5');
+// const md5 = require('md5');
+const bcrypt = require('bcrypt');
+const saltRounds = 10; //increasing saltRounds can require more computation to generate hash
 const app = express();
 
 app.set("view engine", "ejs");
@@ -44,27 +46,31 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  const username = req.body.username;
-  const password = md5(req.body.password);
-  const newUser = User({
-    username: username,
-    password: password
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    const username = req.body.username;
+    const newUser = User({
+      username: username,
+      password: hash
+    });
+    newUser.save();
+    res.render("secrets");
   });
-  newUser.save();
-  res.render("secrets");
 });
+
 app.post("/login", (req, res) => {
   const username = req.body.username;
-  const password = md5(req.body.password);
+  const password = req.body.password;
   User.findOne({
     username: username
   }, (err, fountItem) => {
     if (fountItem) {
-      if (fountItem.password === password) {
-        res.render("secrets");
-      } else {
-        res.send("<h1>No matching username or password</h1>");
-      }
+      bcrypt.compare(password, fountItem.password, function(err, result) {
+        if (result == true)
+          res.render("secrets");
+        else
+          res.send("<h1>No matching username or password</h1>");
+      });
+
     } else {
       res.send("<h1>No matching username or password</h1>");
     }
