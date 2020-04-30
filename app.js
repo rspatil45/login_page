@@ -6,8 +6,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
-const encrypt = require('mongoose-encryption');
-
+// const encrypt = require('mongoose-encryption');
+const md5 = require('md5');
 const app = express();
 
 app.set("view engine", "ejs");
@@ -22,12 +22,15 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
 });
 
 const secret = process.env.SECRET;
-const userSchema = new mongoose.Schema ({
+const userSchema = new mongoose.Schema({
   username: String,
   password: String
 });
 //encryption should done before creating mongoose model
-userSchema.plugin(encrypt,{secret: secret, encryptedFields :['password']});
+// userSchema.plugin(encrypt, {
+//   secret: secret,
+//   encryptedFields: ['password']
+// });
 const User = mongoose.model("user", userSchema);
 
 app.get("/", (req, res) => {
@@ -42,7 +45,7 @@ app.get("/login", (req, res) => {
 
 app.post("/register", (req, res) => {
   const username = req.body.username;
-  const password = req.body.password;
+  const password = md5(req.body.password);
   const newUser = User({
     username: username,
     password: password
@@ -50,21 +53,19 @@ app.post("/register", (req, res) => {
   newUser.save();
   res.render("secrets");
 });
-app.post("/login",(req,res)=>{
+app.post("/login", (req, res) => {
   const username = req.body.username;
-  const password = req.body.password;
-  User.findOne({username: username},(err,fountItem)=>{
-    if(fountItem)
-    {
-      if(fountItem.password === password)
-      {
+  const password = md5(req.body.password);
+  User.findOne({
+    username: username
+  }, (err, fountItem) => {
+    if (fountItem) {
+      if (fountItem.password === password) {
         res.render("secrets");
+      } else {
+        res.send("<h1>No matching username or password</h1>");
       }
-      else{
-          res.send("<h1>No matching username or password</h1>");
-      }
-    }
-    else{
+    } else {
       res.send("<h1>No matching username or password</h1>");
     }
   });
