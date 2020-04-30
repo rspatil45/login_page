@@ -1,4 +1,7 @@
 //jshint esversion:6
+require('dotenv').config(); //very essential for security purpose,
+//don't expose your api key, encryption, passcode publicily
+//instead use environment variables.
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
@@ -18,7 +21,7 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
   useUnifiedTopology: true
 });
 
-const secret = "Thisisourlittlesecret";
+const secret = process.env.SECRET;
 const userSchema = new mongoose.Schema ({
   username: String,
   password: String
