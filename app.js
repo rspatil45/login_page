@@ -1,17 +1,22 @@
 //jshint esversion:6
-require('dotenv').config(); //very essential for security purpose,
-//don't expose your api key, encryption, passcode publicily
-//instead use environment variables.
+require('dotenv').config(); //to hide vulnerable data
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
-// const encrypt = require('mongoose-encryption');
-// const md5 = require('md5');
-const bcrypt = require('bcrypt');
-const saltRounds = 10; //increasing saltRounds can require more computation to generate hash
-const app = express();
+const passport = require('passport');
+const session = require('express-session');
+const passportLocalMongoose = require('passport-local-mongoose');
 
+
+const app = express();
+app.use(session({
+  secret: 'Thisismylittlesecret',
+  resave: false,
+  saveUninitialized: true
+}));
+app.use(passport.initialize());
+app.use(passport.session());
 app.set("view engine", "ejs");
 app.use(express.static("public"));
 app.use(bodyParser.urlencoded({
@@ -22,18 +27,19 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
+mongoose.set('useCreateIndex', true);
 
 const secret = process.env.SECRET;
 const userSchema = new mongoose.Schema({
   username: String,
   password: String
 });
-//encryption should done before creating mongoose model
-// userSchema.plugin(encrypt, {
-//   secret: secret,
-//   encryptedFields: ['password']
-// });
+userSchema.plugin(passportLocalMongoose);
+
 const User = mongoose.model("user", userSchema);
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", (req, res) => {
   res.render("home");
@@ -44,35 +50,48 @@ app.get("/register", (req, res) => {
 app.get("/login", (req, res) => {
   res.render("login");
 });
+app.get("/secrets", function (req, res) {
+  if (req.isAuthenticated()) {
+      res.render("secrets");
+  } else {
+      res.redirect("/login");
+  }
+});
+app.get("/logout",(req,res)=>{
+  req.logout();
+  res.redirect("/");
+})
 
 app.post("/register", (req, res) => {
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-    const username = req.body.username;
-    const newUser = User({
-      username: username,
-      password: hash
-    });
-    newUser.save();
-    res.render("secrets");
+  //the below register fun comes with passport local mongoose
+  User.register({ username: req.body.username }, req.body.password, function (err, user) {
+    if (err) {
+      console.log(err);
+      res.redirect("/register");
+    }
+    else {
+      passport.authenticate("local")(req, res, function () {
+        res.redirect('/secrets');
+      })
+    }
   });
 });
 
 app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
-  User.findOne({
-    username: username
-  }, (err, fountItem) => {
-    if (fountItem) {
-      bcrypt.compare(password, fountItem.password, function(err, result) {
-        if (result == true)
-          res.render("secrets");
-        else
-          res.send("<h1>No matching username or password</h1>");
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password
+  });
+  req.login(user,function(err){
+    if(err){
+      console.log(err);
+      res.redirect("/login");
+    }
+    else{
+      passport.authenticate("local")(req, res, function (err) {
+        res.redirect('/secrets');
+        
       });
-
-    } else {
-      res.send("<h1>No matching username or password</h1>");
     }
   });
 });
